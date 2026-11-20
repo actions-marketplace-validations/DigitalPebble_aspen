@@ -5,7 +5,7 @@
 [![CI CO2eq](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/DigitalPebble/aspen/badges/badge.json)](https://github.com/DigitalPebble/aspen)
 [![CI CO2eq billing](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/DigitalPebble/aspen/badges/badge-billing.json)](https://github.com/DigitalPebble/aspen)
 
-Aspen estimates the energy use and carbon emissions of GitHub Actions for a repository or an organisation. It reads either the jobs of your workflow runs or the GitHub billing report, applies a carbon estimation model (see [Methodology](#methodology)) and writes a JSON report, a markdown summary and an optional badge.
+Aspen estimates the energy use, carbon emissions and water consumption of GitHub Actions for a repository or an organisation. It reads either the jobs of your workflow runs or the GitHub billing report, applies a carbon estimation model (see [Methodology](#methodology)) and writes a JSON report, a markdown summary and an optional badge.
 
 It runs in three ways:
 
@@ -68,6 +68,8 @@ The action analyses the jobs of this repository's workflow runs with the built-i
 | `badge-path` | Path to the badge JSON |
 | `total_co2eq_g` | Total estimated emissions (gCO2eq) |
 | `total_energy_wh` | Total estimated energy usage (Wh) |
+| `total_water_cooling_l` | Total estimated water consumed by data centre cooling (litres) |
+| `total_water_electricity_l` | Total estimated water consumed to generate the electricity used (litres) |
 
 The action also adds a markdown report (totals, per repository, per workflow and per runner SKU) to the job summary. The per-workflow table is only available with the `jobs` source: workflows are grouped by file, shown by name and linked to the file in the repository. Workflows sharing the same name in different files get separate rows.
 
@@ -177,10 +179,22 @@ cargo install --path .
 
 ### Usage
 
+The token is read from the `INPUT_GITHUB_TOKEN` environment variable. There is no `--token` option on purpose: a value passed on the command line shows up in the process list, in your shell history and in the output of tools such as `cargo run`. To type or paste it without it being echoed or stored in your history:
+
+```bash
+read -rs INPUT_GITHUB_TOKEN && export INPUT_GITHUB_TOKEN
+```
+
+Or load it from a file only you can read (`chmod 600`), kept outside the repository:
+
+```bash
+export INPUT_GITHUB_TOKEN=$(< ~/.config/aspen/token)
+```
+
 Fetch the billing report of your organisation and enrich it:
 
 ```bash
-aspen --token ghp_... --organization your-org
+aspen --organization your-org
 ```
 
 By default this covers the last 30 days, like the `jobs` source; change it with `--days`. For a calendar period instead, use `--year`, `--month` and `--day`, e.g. `--year 2026 --month 10` for October.
@@ -190,7 +204,7 @@ The output is written to `./carbon-estimate.json`, or to the path given with `--
 To use the jobs of a single repository instead, with no administrator access:
 
 ```bash
-aspen --source jobs --repository your-org/your-repo --token ghp_... --days 30
+aspen --source jobs --repository your-org/your-repo --days 30
 ```
 
 To work from a saved billing file, using the [GH CLI](https://cli.github.com/):
@@ -213,7 +227,6 @@ Usage: aspen [OPTIONS]
 
 Options:
   -f, --file <FILE>                    Path to a local billing JSON file (instead of fetching from GitHub API)
-  -t, --token <TOKEN>                  GitHub token: `actions: read` on the repository for `jobs`, organization Administration (read) for `billing` [env: INPUT_GITHUB_TOKEN=]
   --source <SOURCE>                    Where to get the usage data from: `billing` (default) or `jobs` [env: INPUT_SOURCE=]
       --days <DAYS>                    Days of usage to analyse, up to today (billing source: ignored when --year, --month or --day is set) [env: INPUT_DAYS=] [default: 30]
       --year <YEAR>                    Year of the billing report (billing source only; replaces --days) [env: INPUT_YEAR=]
@@ -258,15 +271,15 @@ Once you have a first report, a few changes can bring the numbers down.
 
 1. Use your own runners in a region with a low carbon intensity, such as Sweden or France. GitHub hosted runners are mostly in the US, so the same job usually emits less on a grid with more nuclear, hydro or wind.
 2. Avoid triggering workflows when they are not needed. A change to the documentation should not lead to the code being built and tested again. Use `paths` or `paths-ignore` filters on your `push` and `pull_request` triggers, and add a `concurrency` group with `cancel-in-progress` so superseded runs stop early.
-3. Run jobs on ARM runners where your code supports it, for example `ubuntu-24.04-arm`. In Aspen's model a 4 vCPU ARM Ubuntu runner draws 2.157 W against 4.315 W for the x86 one, about half. These figures come from instance types of other cloud providers (Scaleway for ARM, Azure for x86) and not from GitHub's own hardware, so treat the saving as an estimate. It also assumes the job takes about as long on both architectures, so compare durations after switching.
+3. Run jobs on ARM runners where your code supports it, for example `ubuntu-24.04-arm`. In Aspen's model a 4 vCPU ARM Ubuntu runner draws 6.66 W against 11.52 W for the x86 one, a little over half. These figures come from instance types of other cloud providers (Scaleway for ARM, Azure for x86) and not from GitHub's own hardware, so treat the saving as an estimate. It also assumes the job takes about as long on both architectures, so compare durations after switching.
 4. Cache dependencies and build outputs, so jobs spend less time downloading and compiling the same things.
 5. Pick the smallest runner that does the job, and stop long jobs as soon as they fail.
 
 ## Methodology
 
-Energy consumption estimates come from [BoaviztAPI](https://github.com/Boavizta/boaviztapi). The carbon intensity is an average for the US in 2024 from [Ember](https://ember-energy.org). The PUE is as reported by [Microsoft](https://datacenters.microsoft.com/sustainability/efficiency/) for its datacentres in America in 2025.
+Energy consumption estimates come from [BoaviztAPI](https://github.com/Boavizta/boaviztapi). The carbon intensity is an average for the US in 2025 from [Ember](https://ember-energy.org). The PUE is as reported by [Microsoft](https://datacenters.microsoft.com/sustainability/efficiency/) for its datacentres in America in 2025.
 
-Storage (`Actions storage`, billed in `GigabyteHours`) uses an SSD energy factor of 1.2 Wh per terabyte hour, with the same PUE and carbon intensity. Items of that SKU with any other unit are ignored.
+Storage billed in `GigabyteHours` uses the energy factor of the medium its SKU is assumed to use, times the number of copies kept of the data: SSD at 1.2 Wh per terabyte hour and a single copy for `Actions storage`, HDD at 0.65 Wh per terabyte hour and three copies for `Packages storage`. The factors come from the [SPRUCE storage module](https://opensourcegreenops.cloud/modules/#storage), and the same PUE and carbon intensity apply. Any other SKU billed in gigabyte hours is ignored, as are these two in any other unit.
 
 See [METHODOLOGY.md](METHODOLOGY.md) for the full details: the formula, where the figures are configured, the assumptions behind them, what is not estimated and the known limitations.
 

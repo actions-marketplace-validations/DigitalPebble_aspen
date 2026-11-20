@@ -1,47 +1,74 @@
 {
   "power_consumption": {
-    "description": "Power consumption in Watts per hour for different runner types",
+    "description": "Power consumption in Watts for different runner types, at 50% load",
     "runners": {
       "ubuntu-slim": {
-        "value": 1.078,
+        "value": 2.88,
         "description": "Quarter of a standard ubuntu runner"
       },
       "ubuntu": {
-        "value": 4.315,
+        "value": 11.52,
         "description": "Standard 4-vCPU x86 Ubuntu VM, based on a D4as_v4 from Azure"
       },
       "windows": {
-        "value": 4.746,
-        "description": "Standard 4-vCPU x86 Windows VM (higher due to OS overhead)"
+        "value": 12.67,
+        "description": "Standard 4-vCPU x86 Windows VM (10% higher due to OS overhead)"
       },
       "ubuntu-arm": {
-        "value": 2.157,
+        "value": 6.66,
         "description": "4-vCPU ARM64 Ubuntu VM (more efficient), based on coparm1-4c-16g instance from Scaleway"
       },
       "windows-arm": {
-        "value": 2.372,
+        "value": 7.33,
         "description": "4-vCPU ARM64 Windows VM"
       },
       "macos": {
-        "value": -1,
-        "description": "Apple Silicon M-series (3-vCPU, very efficient) - TODO find estimates"
+        "value": 8.47,
+        "description": "Standard 3-vCPU Apple silicon (M1) macOS runner, 3/8 of a mac2.metal host from BoaviztAPI (22.59 W)"
       },
-      "macos-13": {
-        "value": -1,
-        "description": "Intel-based macOS (older, less efficient) - TODO find estimates"
+      "macos-intel": {
+        "value": 23.35,
+        "description": "Standard 4-vCPU Intel macOS runner, 4/12 of a mac1.metal host from BoaviztAPI (70.06 W)"
       }
     }
   },
   "storage_energy": {
-    "description": "Energy consumption of storage in Watt-hours per Terabyte-hour",
+    "description": "Energy consumption of storage in Watt-hours per Terabyte-hour, from https://opensourcegreenops.cloud/modules/#storage",
     "ssd": {
       "value": 1.2,
       "description": "SSD storage"
+    },
+    "hdd": {
+      "value": 0.65,
+      "description": "HDD storage, as used by storage as a service like S3"
+    }
+  },
+  "storage": {
+    "description": "SKUs billed in gigabyte hours, with the medium they are assumed to use and the number of copies kept of the data. SKU names are matched in lower case",
+    "skus": {
+      "actions storage": {
+        "medium": "ssd",
+        "replication": 1,
+        "description": "Actions artifacts and caches - replication unknown, counted as a single copy"
+      },
+      "packages storage": {
+        "medium": "hdd",
+        "replication": 3,
+        "description": "GitHub Packages, assumed to behave like object storage and to keep three copies"
+      }
     }
   },
   "grid_carbon_intensity": {
-    "description": "US average carbon intensity in grams CO2e per kWh for 2024, from https://ember-energy.org/",
-    "value": 383
+    "description": "US average carbon intensity in grams CO2e per kWh for 2025, from https://ember-energy.org/",
+    "value": 384
+  },
+  "wue": {
+    "description": "Water Usage Effectiveness - litres of water consumed on site for cooling per kWh of IT energy. 0.34 is the value reported by Microsoft for its US data centres, as used by SPRUCE for the Azure regions (azure-pue-wue.csv)",
+    "value": 0.34
+  },
+  "wcf": {
+    "description": "Water Consumption Factor - litres of water consumed per kWh of electricity generated. Average of the WRI factors for the US Azure regions, from SPRUCE (wcf.csv)",
+    "value": 3.5781
   },
   "pue": {
     "description": "Power Usage Effectiveness - ratio of total data center power to IT equipment power. Accounts for cooling, power distribution, and other overhead",

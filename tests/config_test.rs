@@ -21,7 +21,7 @@ fn grid_carbon_intensity() {
     assert_close(
         "grid_carbon_intensity",
         Config::instance().grid_carbon_intensity,
-        383.0,
+        384.0,
     );
 }
 
@@ -41,13 +41,13 @@ fn runner_power_consumption_contains_all_runners() {
     );
 
     let cases = [
-        ("ubuntu", 4.315),
-        ("ubuntu-slim", 1.078),
-        ("ubuntu-arm", 2.157),
-        ("windows", 4.746),
-        ("windows-arm", 2.372),
-        ("macos", -1.0),
-        ("macos-13", -1.0),
+        ("ubuntu", 11.52),
+        ("ubuntu-slim", 2.88),
+        ("ubuntu-arm", 6.66),
+        ("windows", 12.67),
+        ("windows-arm", 7.33),
+        ("macos", 8.47),
+        ("macos-intel", 23.35),
     ];
 
     for (name, expected) in cases {
@@ -55,5 +55,33 @@ fn runner_power_consumption_contains_all_runners() {
             .get(name)
             .unwrap_or_else(|| panic!("runner '{name}' missing from config"));
         assert_close(&format!("runners[{name}]"), actual, expected);
+    }
+}
+
+#[test]
+fn storage_skus_resolve_their_medium_and_replication() {
+    let skus = &Config::instance().storage_skus;
+    assert_eq!(skus.len(), 2, "expected 2 storage SKUs, got {}", skus.len());
+
+    // SKUs are keyed in lower case, and carry the energy of their medium
+    let cases = [
+        ("actions storage", 1.2, 1.0),
+        ("packages storage", 0.65, 3.0),
+    ];
+
+    for (sku, wh_per_tb_hour, replication) in cases {
+        let storage = skus
+            .get(sku)
+            .unwrap_or_else(|| panic!("storage SKU '{sku}' missing from config"));
+        assert_close(
+            &format!("{sku} Wh per terabyte-hour"),
+            storage.wh_per_tb_hour,
+            wh_per_tb_hour,
+        );
+        assert_close(
+            &format!("{sku} replication"),
+            storage.replication,
+            replication,
+        );
     }
 }

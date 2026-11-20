@@ -31,9 +31,11 @@ fn totals_sum_estimated_items_only() {
 fn step_outputs_contains_totals() {
     let out = step_outputs(&estimated_bill());
     let lines: Vec<&str> = out.lines().collect();
-    assert_eq!(lines.len(), 2);
+    assert_eq!(lines.len(), 4);
     assert!(lines[0].starts_with("total_co2eq_g="));
     assert!(lines[1].starts_with("total_energy_wh="));
+    assert!(lines[2].starts_with("total_water_cooling_l="));
+    assert!(lines[3].starts_with("total_water_electricity_l="));
 }
 
 #[test]
@@ -52,21 +54,21 @@ fn markdown_for_empty_bill() {
     assert!(md.contains("No usage with an available estimate"));
     assert_eq!(
         step_outputs(&bill),
-        "total_co2eq_g=0.000\ntotal_energy_wh=0.000\n"
+        "total_co2eq_g=0.000\ntotal_energy_wh=0.000\ntotal_water_cooling_l=0.000\ntotal_water_electricity_l=0.000\n"
     );
 }
 
 #[test]
 fn lists_runners_without_estimate() {
     let json = r#"{"usageItems":[{"date":"2026-01-01T00:00:00Z","product":"actions",
-        "sku":"Actions macOS 3-core","quantity":10.0,"unitType":"Minutes","pricePerUnit":0.0,
+        "sku":"Actions macOS 12-core","quantity":10.0,"unitType":"Minutes","pricePerUnit":0.0,
         "grossAmount":0.0,"discountAmount":0.0,"netAmount":0.0,
         "organizationName":"o","repositoryName":"r"}]}"#;
     let mut bill = ActionsBill::from_json(json).unwrap();
     calculate_carbon_impact(&mut bill);
     let md = to_markdown(&bill);
     assert!(md.contains("Not estimated"));
-    assert!(md.contains("Actions macOS 3-core"));
+    assert!(md.contains("Actions macOS 12-core"));
 }
 
 #[test]
