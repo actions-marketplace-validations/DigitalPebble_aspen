@@ -22,7 +22,7 @@ fn deserialise_from_json() {
     assert!((first.gross_amount - 0.000664386).abs() < 1e-9);
     assert!((first.discount_amount - 0.000664386).abs() < 1e-9);
     assert!((first.net_amount - 0.0).abs() < 1e-9);
-    assert_eq!(first.organization_name, "DigitalPebble");
+    assert_eq!(first.organization_name.as_deref(), Some("DigitalPebble"));
     assert_eq!(first.repository_name, "spruce");
 }
 
@@ -45,6 +45,26 @@ fn serialise_to_json() {
         assert_eq!(original.unit_type, restored.unit_type);
         assert_eq!(original.repository_name, restored.repository_name);
     }
+}
+
+#[test]
+fn personal_account_export_has_no_organization() {
+    let json = r#"{"usageItems":[{"date":"2026-04-01T00:00:00Z","product":"actions",
+        "sku":"Actions Linux","quantity":1.0,"unitType":"Minutes","pricePerUnit":0.006,
+        "grossAmount":0.006,"discountAmount":0.006,"netAmount":0.0,"repositoryName":"aspen"}]}"#;
+    let bill = ActionsBill::from_json(json).unwrap();
+    assert_eq!(bill.usage_items[0].organization_name, None);
+    let serialised = bill.to_json().unwrap();
+    assert!(!serialised.contains("organizationName"));
+}
+
+#[test]
+fn organization_is_kept_when_present() {
+    let serialised = ActionsBill::from_json(load_test_json())
+        .unwrap()
+        .to_json()
+        .unwrap();
+    assert!(serialised.contains(r#""organizationName": "DigitalPebble""#));
 }
 
 #[test]
@@ -99,12 +119,30 @@ mod repository_filter {
     }
 
     #[test]
+    fn items_without_organization_match_on_repository_name() {
+        let json = r#"{"usageItems":[
+            {"date":"2025-01-01","product":"actions","sku":"actions_linux","quantity":1.0,
+             "unitType":"minutes","pricePerUnit":0.0,"grossAmount":0.0,"discountAmount":0.0,
+             "netAmount":0.0,"repositoryName":"aspen"},
+            {"date":"2025-01-01","product":"actions","sku":"actions_linux","quantity":1.0,
+             "unitType":"minutes","pricePerUnit":0.0,"grossAmount":0.0,"discountAmount":0.0,
+             "netAmount":0.0,"repositoryName":"other"}]}"#;
+        let mut b = ActionsBill::from_json(json).unwrap();
+        b.retain_repository("jnioche", "aspen");
+        assert_eq!(b.usage_items.len(), 1);
+        assert_eq!(b.usage_items[0].repository_name, "aspen");
+    }
+
+    #[test]
     fn keeps_only_the_given_repository() {
         let mut b = ActionsBill::from_json(&bill()).unwrap();
         b.retain_repository("DigitalPebble", "public-repo");
         assert_eq!(b.usage_items.len(), 1);
         assert_eq!(b.usage_items[0].repository_name, "public-repo");
-        assert_eq!(b.usage_items[0].organization_name, "DigitalPebble");
+        assert_eq!(
+            b.usage_items[0].organization_name.as_deref(),
+            Some("DigitalPebble")
+        );
     }
 
     #[test]

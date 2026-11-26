@@ -1,0 +1,128 @@
+---
+layout: default
+layout_class: home
+---
+<section class="hero">
+  <div class="wrap">
+    <img class="hero-icon" src="{{ '/assets/aspen-icon.svg' | relative_url }}" width="96" height="96" alt="">
+    <h1>Aspen</h1>
+    <p class="lead">Estimate the energy use, carbon emissions and water consumption of your GitHub Actions, for one repository or a whole organisation.</p>
+    <p class="badges">
+      <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/DigitalPebble/aspen/badges/badge.json" alt="CI CO2eq badge of the Aspen repository">
+      <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/DigitalPebble/aspen/badges/badge-billing.json" alt="CI CO2eq billing badge of the Aspen repository">
+    </p>
+    <p class="actions">
+      <a class="button primary" href="#setup">Add it to a workflow</a>
+      <a class="button" href="{{ '/simulator/' | relative_url }}">Try the simulator</a>
+      <a class="button" href="{{ '/methodology/' | relative_url }}">Read the methodology</a>
+    </p>
+  </div>
+</section>
+
+<section id="what" class="wrap">
+  <h2>What Aspen does</h2>
+  <p>CI runs in data centres, and most GitHub hosted runners are in the US, where the grid still relies heavily on fossil fuels. Free minutes cost you nothing, but the electricity they use still emits carbon and consumes water.</p>
+  <p>Aspen takes the minutes your workflows ran on each type of runner, plus the storage they used, and turns them into three figures:</p>
+  <ul class="figures">
+    <li><strong>Energy</strong><span>in watt hours, from the estimated power draw of each runner type and the data centre overhead (PUE)</span></li>
+    <li><strong>Carbon</strong><span>in grams of CO<sub>2</sub> equivalent, using the average carbon intensity of the US grid</span></li>
+    <li><strong>Water</strong><span>in litres, for data centre cooling and for generating the electricity</span></li>
+  </ul>
+  <p>To get a feel for the figures, enter a number of minutes in the <a href="{{ '/simulator/' | relative_url }}">simulator</a>.</p>
+  <p>It writes them to a JSON report, a markdown summary in the job page (totals per repository, per workflow and per runner) and an optional badge for your README.</p>
+  <p class="note">Aspen estimates from durations and runner types; it does not measure energy on the runner. For measured figures per step, look at <a href="https://github.com/green-coding-solutions/eco-ci-energy-estimation/">eco-ci-energy-estimation</a>.</p>
+</section>
+
+<section id="how" class="wrap">
+  <h2>Two ways to get the data</h2>
+  <p>Aspen can read the usage from two sources. Both cover the same period, the last 30 days by default, so their figures can be compared.</p>
+  <div class="cards">
+    <div class="card">
+      <h3><code>jobs</code> <span class="tag silver">default</span></h3>
+      <p>Reads the jobs of this repository's workflow runs through the Actions API.</p>
+      <ul>
+        <li>Works with the built-in <code>GITHUB_TOKEN</code>, no secret to set up</li>
+        <li>Breaks the emissions down per workflow file</li>
+        <li>Durations are rounded up to whole minutes and the runner type is inferred from labels such as <code>ubuntu-latest</code></li>
+        <li>Storage, self hosted and larger runners are not estimated</li>
+        <li>Makes one API request per workflow run, so it is slower and the built-in token runs out of requests above roughly 950 runs</li>
+      </ul>
+      <p class="card-foot">Start here. The badge is <strong>silver</strong>.</p>
+    </div>
+    <div class="card">
+      <h3><code>billing</code></h3>
+      <p>Reads the organisation's billing report, the data GitHub invoices.</p>
+      <ul>
+        <li>Minutes as billed and runner types from the billing SKU, so it is the more precise of the two</li>
+        <li>Includes Actions and Packages storage</li>
+        <li>No per workflow breakdown, as the billing API does not expose it</li>
+        <li>Makes one API request per calendar month in the period, so it finishes in seconds</li>
+        <li>Needs an organisation token with <code>Administration</code> (read), which can see the billing of every repository</li>
+      </ul>
+      <p class="card-foot">In a workflow, the report is filtered to the current repository. Run the <a href="https://github.com/DigitalPebble/aspen#3-cli-outside-github-actions">command line tool</a> to cover the whole organisation. The badge is <strong>gold</strong>.</p>
+    </div>
+  </div>
+</section>
+
+<section id="setup" class="wrap">
+  <h2>Add it to a workflow</h2>
+  <p>Save this as <code>.github/workflows/carbon.yml</code>. It runs every Monday, adds the summary to the job page, publishes the badge to a <code>badges</code> branch and keeps the JSON report as an artifact. The action downloads a prebuilt binary and checks its SHA-256 checksum, so there is no build step.</p>
+{% raw %}<pre><code class="language-yaml">name: Carbon estimate
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write # to publish the badge on the `badges` branch
+
+jobs:
+  estimate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: DigitalPebble/aspen@v1
+        id: aspen
+        with:
+          publish_badge: true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: carbon-estimate
+          path: ${{ steps.aspen.outputs.report-path }}
+</code></pre>{% endraw %}
+  <p>To use the <code>billing</code> source instead, pass an organisation token stored as a secret:</p>
+{% raw %}<pre><code class="language-yaml">      - uses: DigitalPebble/aspen@v1
+        with:
+          source: billing
+          github_token: ${{ secrets.ORG_BILLING_TOKEN }}
+          publish_badge: true
+          badge_path: badge-billing.json
+</code></pre>{% endraw %}
+  <p class="note">The billing token can read the billing data of the whole organisation, including private repositories. Read the <a href="https://github.com/DigitalPebble/aspen#security-considerations">security considerations</a> before using it, especially in a public repository.</p>
+  <p>All the inputs and outputs of the action are listed in the <a href="https://github.com/DigitalPebble/aspen#1-github-action-with-the-jobs-source">README</a>.</p>
+</section>
+
+<section id="badge" class="wrap">
+  <h2>Show a badge</h2>
+  <p>With <code>publish_badge: true</code>, the action commits a <a href="https://shields.io/badges/endpoint-badge">shields.io endpoint</a> file with the emissions over the period to the <code>badges</code> branch. Add it to your README, replacing <code>OWNER/REPO</code> with your repository:</p>
+<pre><code class="language-markdown">[![CI CO2eq](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/OWNER/REPO/badges/badge.json)](https://aspen.digitalpebble.com/)
+</code></pre>
+  <p>This is what it looks like for Aspen itself, with the <code>jobs</code> source then the <code>billing</code> one:</p>
+  <p class="badges left">
+    <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/DigitalPebble/aspen/badges/badge.json" alt="CI CO2eq badge, jobs source">
+    <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/DigitalPebble/aspen/badges/badge-billing.json" alt="CI CO2eq badge, billing source">
+  </p>
+  <p>The badge only works for public repositories, since shields.io cannot read a branch of a private one.</p>
+</section>
+
+<section id="next" class="wrap">
+  <h2>Bringing the numbers down</h2>
+  <ul>
+    <li>Skip runs that are not needed, with <code>paths</code> or <code>paths-ignore</code> filters and a <code>concurrency</code> group with <code>cancel-in-progress</code>.</li>
+    <li>Use ARM runners such as <code>ubuntu-24.04-arm</code> where your code supports it. In Aspen's model they draw 6.66 W against 11.52 W for x86.</li>
+    <li>Cache dependencies and build outputs.</li>
+    <li>Run your own runners in a region with a low carbon intensity, such as Sweden or France.</li>
+  </ul>
+  <p>The <a href="{{ '/methodology/' | relative_url }}">methodology</a> explains where every figure comes from and what Aspen does not estimate.</p>
+</section>

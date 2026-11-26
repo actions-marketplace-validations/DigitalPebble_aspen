@@ -11,7 +11,7 @@ use chrono::Datelike;
 use clap::Parser;
 use model::ActionsBill;
 use std::fs::{self, OpenOptions};
-use std::io::{Read, Write};
+use std::io::{IsTerminal, Read, Write};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Mutex;
@@ -41,6 +41,10 @@ struct Cli {
     /// GitHub organization name
     #[arg(short, long, env = "INPUT_ORGANIZATION")]
     organization: Option<String>,
+
+    /// GitHub user name, to fetch the billing data of a personal account instead of an organization
+    #[arg(short, long, conflicts_with = "organization")]
+    user: Option<String>,
 
     /// Restrict the report to a single repository ("owner/name"); the organization is derived from it
     #[arg(short, long, env = "INPUT_REPOSITORY")]
@@ -101,10 +105,15 @@ fn append_to_file(path: &str, content: &str) -> Result<()> {
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
+    // Filter mode: billing JSON piped on stdin, with nothing saying where else to get
+    // the data from. The token is not part of the check, since it lives in the
+    // environment and is often exported in the shell.
+    let unset = |v: &Option<String>| v.as_deref().is_none_or(str::is_empty);
     let filter_mode = cli.file.is_none()
-        && cli.token.is_none()
-        && cli.organization.is_none()
-        && cli.repository.is_none();
+        && unset(&cli.organization)
+        && unset(&cli.user)
+        && unset(&cli.repository)
+        && !std::io::stdin().is_terminal();
 
     let repo = cli
         .repository
@@ -153,15 +162,19 @@ fn main() -> Result<()> {
             cli.token.as_deref().filter(|s| !s.is_empty()).context(
                 "GitHub token is required when not using --file (set INPUT_GITHUB_TOKEN)",
             )?;
-        let organization = repo
-            .as_ref()
-            .map(|(o, _)| o.as_str())
-            .or(cli.organization.as_deref().filter(|s| !s.is_empty()))
-            .context("Organization is required when not using --file (set --organization or INPUT_ORGANIZATION)")?;
-        println!("Fetching billing data for organization: {}", organization);
+        let account = match cli.user.as_deref().filter(|s| !s.is_empty()) {
+            Some(user) => Account::User(user),
+            None => Account::Organization(
+                repo.as_ref()
+                    .map(|(o, _)| o.as_str())
+                    .or(cli.organization.as_deref().filter(|s| !s.is_empty()))
+                    .context("Organization or user is required when not using --file (set --organization, --user or INPUT_ORGANIZATION)")?,
+            ),
+        };
+        println!("Fetching billing data for {}", account);
         let bill = if cli.year.is_none() && cli.month.is_none() && cli.day.is_none() {
             badge_period = format!("{}d", cli.days);
-            fetch_billing_last_days(token, organization, cli.days)?
+            fetch_billing_last_days(token, &account, cli.days)?
         } else {
             badge_period = match (cli.year, cli.month, cli.day) {
                 (Some(y), Some(m), Some(d)) => format!("{y}-{m:02}-{d:02}"),
@@ -169,7 +182,7 @@ fn main() -> Result<()> {
                 (Some(y), None, None) => y.to_string(),
                 _ => String::new(),
             };
-            fetch_billing_usage(token, organization, cli.year, cli.month, cli.day)?
+            fetch_billing_usage(token, &account, cli.year, cli.month, cli.day)?
         };
         badge_color = summary::BADGE_COLOR_BILLING;
         println!("Loaded {} usage items", bill.usage_items.len());
@@ -220,11 +233,49 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+/// The account whose billing data is fetched.
+enum Account<'a> {
+    Organization(&'a str),
+    User(&'a str),
+}
+
+impl Account<'_> {
+    fn name(&self) -> &str {
+        match self {
+            Account::Organization(name) | Account::User(name) => name,
+        }
+    }
+
+    fn usage_url(&self) -> String {
+        match self {
+            Account::Organization(name) => format!(
+                "https://api.github.com/organizations/{}/settings/billing/usage",
+                name
+            ),
+            Account::User(name) => {
+                format!(
+                    "https://api.github.com/users/{}/settings/billing/usage",
+                    name
+                )
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for Account<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Account::Organization(name) => write!(f, "organization: {}", name),
+            Account::User(name) => write!(f, "user: {}", name),
+        }
+    }
+}
+
 /// Fetches the billing usage of the last `days` days, today included, to match the
 /// period of the jobs source. A yearly report only has one item per month, so each
 /// month overlapping the period is fetched on its own (daily items) and the items
 /// before the first day are dropped.
-fn fetch_billing_last_days(token: &str, organization: &str, days: u32) -> Result<ActionsBill> {
+fn fetch_billing_last_days(token: &str, account: &Account, days: u32) -> Result<ActionsBill> {
     let today = chrono::Utc::now().date_naive();
     let since = today - chrono::Duration::days(days as i64);
     let since_str = since.format("%Y-%m-%d").to_string();
@@ -232,8 +283,7 @@ fn fetch_billing_last_days(token: &str, organization: &str, days: u32) -> Result
     let mut bill = ActionsBill::default();
     let (mut year, mut month) = (since.year(), since.month());
     while (year, month) <= (today.year(), today.month()) {
-        let monthly =
-            fetch_billing_usage(token, organization, Some(year as u32), Some(month), None)?;
+        let monthly = fetch_billing_usage(token, account, Some(year as u32), Some(month), None)?;
         bill.usage_items.extend(
             monthly
                 .usage_items
@@ -251,15 +301,12 @@ fn fetch_billing_last_days(token: &str, organization: &str, days: u32) -> Result
 
 fn fetch_billing_usage(
     token: &str,
-    organization: &str,
+    account: &Account,
     year: Option<u32>,
     month: Option<u32>,
     day: Option<u32>,
 ) -> Result<ActionsBill> {
-    let mut url = format!(
-        "https://api.github.com/organizations/{}/settings/billing/usage",
-        organization
-    );
+    let mut url = account.usage_url();
     let params: Vec<String> = [("year", year), ("month", month), ("day", day)]
         .iter()
         .filter_map(|(k, v)| v.map(|v| format!("{}={}", k, v)))
@@ -274,7 +321,7 @@ fn fetch_billing_usage(
         .header("Authorization", format!("Bearer {}", token))
         .header("Accept", "application/vnd.github+json")
         .header("X-GitHub-Api-Version", "2022-11-28")
-        .header("User-Agent", format!("Aspen/{}", organization))
+        .header("User-Agent", format!("Aspen/{}", account.name()))
         .build()
         .context("Failed to build request")?;
 
@@ -468,7 +515,7 @@ fn collect_jobs_usage(token: &str, owner: &str, repo: &str, days: u32) -> Result
                     Ok(items) => {
                         results.lock().unwrap()[i] = Some(items);
                         let n = done.fetch_add(1, Ordering::Relaxed) + 1;
-                        if n % step == 0 || n == total {
+                        if n.is_multiple_of(step) || n == total {
                             eprintln!("Fetched jobs for {}/{} runs", n, total);
                         }
                     }

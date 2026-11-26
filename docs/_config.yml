@@ -1,0 +1,13 @@
+title: Aspen
+description: Estimate the energy use, carbon emissions and water consumption of your GitHub Actions.
+url: https://aspen.digitalpebble.com
+baseurl: ""
+repository: DigitalPebble/aspen
+
+markdown: kramdown
+kramdown:
+  input: GFM
+  hard_wrap: false
+
+exclude:
+  - README.md

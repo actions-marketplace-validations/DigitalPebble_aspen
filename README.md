@@ -1,17 +1,17 @@
-<img src="resources/brand/aspen-icon.svg" width="96" alt="aspen">
+<img src="resources/brand/seasons/aspen-icon-autumn.svg" width="96" alt="aspen">
 
 # Aspen - GitHub Actions Carbon Estimator
 
 [![CI CO2eq](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/DigitalPebble/aspen/badges/badge.json)](https://github.com/DigitalPebble/aspen)
 [![CI CO2eq billing](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/DigitalPebble/aspen/badges/badge-billing.json)](https://github.com/DigitalPebble/aspen)
 
-Aspen estimates the energy use, carbon emissions and water consumption of GitHub Actions for a repository or an organisation. It reads either the jobs of your workflow runs or the GitHub billing report, applies a carbon estimation model (see [Methodology](#methodology)) and writes a JSON report, a markdown summary and an optional badge.
+Aspen estimates the energy use, carbon emissions and water consumption of GitHub Actions for a repository, an organisation or a personal account. It reads either the jobs of your workflow runs or the GitHub billing report, applies a carbon estimation model (see [Methodology](#methodology)) and writes a JSON report, a markdown summary and an optional badge.
 
 It runs in three ways:
 
 1. [As a GitHub Action with the `jobs` source](#1-github-action-with-the-jobs-source): no secret needed, one repository.
 2. [As a GitHub Action with the `billing` source](#2-github-action-with-the-billing-source): needs an organisation token, one repository.
-3. [As a CLI outside GitHub Actions](#3-cli-outside-github-actions): the whole organisation.
+3. [As a CLI outside GitHub Actions](#3-cli-outside-github-actions): a whole organisation or personal account.
 
 Aspen estimates emissions from job durations and runner types; it does not measure energy on the runner. If you need measured, per-step energy figures, look at [eco-ci-energy-estimation](https://github.com/green-coding-solutions/eco-ci-energy-estimation/).
 
@@ -33,6 +33,8 @@ Data centres use a growing share of the world's electricity, and a large part of
 | Period | last `days` days, at most 5,000 runs | last `days` days, or any year, month or day via `--year`, `--month`, `--day` (CLI only) |
 | Coverage | the repository the token belongs to | the whole organisation |
 | Token | built-in `GITHUB_TOKEN` | organisation `Administration` (read) |
+| API requests | one per workflow run, plus one per 100 runs listed | one per calendar month in the period |
+| Speed | tens of seconds for a few hundred runs, rate limited above roughly 950 runs with the built-in token | one or two HTTP calls |
 | Badge | ![CI CO2eq](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/DigitalPebble/aspen/badges/badge.json) | ![CI CO2eq billing](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/DigitalPebble/aspen/badges/badge-billing.json) |
 
 `jobs` is an approximation: durations are rounded up and runner types are guessed from labels such as `ubuntu-latest` or `windows-latest`. `billing` is the data GitHub invoices, so it is the more precise of the two and the only one covering storage and the whole organisation, at the cost of a powerful token. Only `jobs` can tell you which workflow the emissions come from.
@@ -160,7 +162,7 @@ Recommendations:
 
 ## 3. CLI outside GitHub Actions
 
-The CLI is for administrators who want data for the **entire organisation**. Without `--repository` nothing is filtered, so keep the output private. It needs the same token as the `billing` source.
+The CLI is for administrators who want data for the **entire organisation**, and for users who want data for their **personal account**. Without `--repository` nothing is filtered, so keep the output private. For an organisation, it needs the same token as the `billing` source. For a personal account, see [Personal accounts](#personal-accounts).
 
 ### Install
 
@@ -203,6 +205,26 @@ By default this covers the last 30 days, like the `jobs` source; change it with 
 
 The output is written to `./carbon-estimate.json`, or to the path given with `--output`. Both values can also come from environment variables (see the options below).
 
+### Personal accounts
+
+Repositories owned by your personal account have their own billing report, separate from any organisation. Fetch it with `--user` and your GitHub user name:
+
+```bash
+aspen --user your-name
+```
+
+`--user` cannot be combined with `--organization`. The period options (`--days`, `--year`, `--month` and `--day`) and `--repository` work as they do for an organisation. Usage billed to an organisation is not in this report.
+
+The token is a fine-grained personal access token with Account permissions → `Plan` → Read-only. Create it on your personal account with only this permission. It can read the billing data of every repository your account owns, private ones included.
+
+The items of a personal report have no `organizationName`, and Aspen leaves the field out of its output too. A saved report works with `--file` and on stdin. The token of the GH CLI usually lacks the `Plan` permission, so pass yours to it:
+
+```bash
+GH_TOKEN=$INPUT_GITHUB_TOKEN gh api /users/$USER_NAME/settings/billing/usage | aspen > carbon-estimate.json
+```
+
+### Other sources
+
 To use the jobs of a single repository instead, with no administrator access:
 
 ```bash
@@ -237,6 +259,7 @@ Options:
       --badge <BADGE>                  Path where a shields.io endpoint badge (JSON) will be written [env: INPUT_BADGE_PATH=]
   -r, --repository <REPOSITORY>        Restrict the report to a single repository ("owner/name"); the organization is derived from it [env: INPUT_REPOSITORY=]
   -o, --organization <ORGANIZATION>    GitHub organization name [env: INPUT_ORGANIZATION=]
+  -u, --user <USER>                    GitHub user name, to fetch the billing data of a personal account instead of an organization
   -O, --output <OUTPUT>                Path where the carbon estimate report will be saved [env: INPUT_OUTPUT_PATH=] [default: ./carbon-estimate.json]
   -s, --summary <SUMMARY>              File to append a markdown summary to (totals, per repository, per workflow with `jobs`, and per SKU) [env: GITHUB_STEP_SUMMARY=]
   -h, --help                           Print help

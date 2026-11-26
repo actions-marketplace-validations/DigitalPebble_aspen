@@ -99,7 +99,7 @@ pub fn items_from_jobs(json: &str, owner: &str, repo: &str) -> anyhow::Result<Ve
             gross_amount: 0.0,
             discount_amount: 0.0,
             net_amount: 0.0,
-            organization_name: owner.to_string(),
+            organization_name: Some(owner.to_string()),
             repository_name: repo.to_string(),
             workflow_name: None,
             workflow_path: None,

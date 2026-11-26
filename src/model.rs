@@ -16,7 +16,9 @@ pub struct UsageItem {
     pub gross_amount: f64,
     pub discount_amount: f64,
     pub net_amount: f64,
-    pub organization_name: String,
+    /// Absent from the billing exports of personal accounts, and then left out of the output too.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub organization_name: Option<String>,
     pub repository_name: String,
 
     /// Name of the workflow the usage comes from (jobs source only).
@@ -76,11 +78,15 @@ pub fn parse_repository(repo: &str) -> anyhow::Result<(String, String)> {
 }
 
 impl ActionsBill {
-    /// Keeps only the usage items of the given repository (case-insensitive).
+    /// Keeps only the usage items of the given repository (case-insensitive). Items
+    /// without an organisation, as in the exports of personal accounts, match on the
+    /// repository name alone.
     pub fn retain_repository(&mut self, owner: &str, name: &str) {
         self.usage_items.retain(|i| {
             i.repository_name.eq_ignore_ascii_case(name)
-                && i.organization_name.eq_ignore_ascii_case(owner)
+                && i.organization_name
+                    .as_deref()
+                    .is_none_or(|o| o.eq_ignore_ascii_case(owner))
         });
     }
 

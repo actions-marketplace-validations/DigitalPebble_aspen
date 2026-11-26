@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% if page.title %}{{ page.title }} · {% endif %}{{ site.title }}: GitHub Actions carbon estimator</title>
+  <meta name="description" content="{{ page.description | default: site.description }}">
+  <link rel="icon" href="{{ '/assets/aspen-icon.svg' | relative_url }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ '/assets/style.css' | relative_url }}">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="{{ '/' | relative_url }}">
+        <img src="{{ '/assets/aspen-icon.svg' | relative_url }}" width="32" height="32" alt="">
+        <span>Aspen</span>
+      </a>
+      <nav>
+        <a href="{{ '/#how' | relative_url }}">How it works</a>
+        <a href="{{ '/#setup' | relative_url }}">Set up</a>
+        <a href="{{ '/simulator/' | relative_url }}"{% if page.url == '/simulator/' %} aria-current="page"{% endif %}>Simulator</a>
+        <a href="{{ '/methodology/' | relative_url }}"{% if page.url == '/methodology/' %} aria-current="page"{% endif %}>Methodology</a>
+        <a href="https://github.com/{{ site.repository }}">GitHub</a>
+        <a href="https://github.com/sponsors/DigitalPebble">Sponsor</a>
+      </nav>
+    </div>
+  </header>
+
+  <main{% if page.layout_class %} class="{{ page.layout_class }}"{% endif %}>
+    {{ content }}
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>Aspen is open source under the Apache License 2.0 and developed by <a href="https://digitalpebble.com/">DigitalPebble</a>.
+      Get in touch if you need help with GreenOps, or <a href="https://github.com/sponsors/DigitalPebble">sponsor the project</a>.</p>
+    </div>
+  </footer>
+</body>
+</html>

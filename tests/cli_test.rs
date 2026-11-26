@@ -85,3 +85,39 @@ fn badge_is_written_when_requested() {
     assert_eq!(v["color"], "ffd700"); // data read from a file is billing data: gold
     std::fs::remove_dir_all(&dir).ok();
 }
+
+#[test]
+fn filter_mode_accepts_a_personal_account_export() {
+    use std::io::Write;
+    use std::process::Stdio;
+
+    let input = r#"{"usageItems":[{"date":"2026-04-01T00:00:00Z","product":"actions",
+        "sku":"Actions Linux","quantity":1.0,"unitType":"Minutes","pricePerUnit":0.006,
+        "grossAmount":0.006,"discountAmount":0.006,"netAmount":0.0,"repositoryName":"aspen"}]}"#;
+    let mut child = Command::new(env!("CARGO_BIN_EXE_aspen"))
+        .env_remove("INPUT_GITHUB_TOKEN")
+        .env_remove("INPUT_ORGANIZATION")
+        .env_remove("INPUT_REPOSITORY")
+        .env_remove("GITHUB_STEP_SUMMARY")
+        .env_remove("GITHUB_OUTPUT")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.as_bytes())
+        .unwrap();
+    let out = child.wait_with_output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(stdout.contains(r#""repositoryName": "aspen""#));
+    assert!(!stdout.contains("organizationName"));
+}

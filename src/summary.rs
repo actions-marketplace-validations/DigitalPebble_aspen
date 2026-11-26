@@ -134,10 +134,11 @@ pub fn to_markdown(bill: &ActionsBill) -> String {
 fn workflow_key(item: &UsageItem) -> Option<(String, String, String)> {
     let name = item.workflow_name.as_deref();
     let path = item.workflow_path.as_deref();
-    let repo = if item.organization_name.is_empty() || item.repository_name.is_empty() {
-        String::new()
-    } else {
-        format!("{}/{}", item.organization_name, item.repository_name)
+    let repo = match item.organization_name.as_deref() {
+        Some(org) if !org.is_empty() && !item.repository_name.is_empty() => {
+            format!("{}/{}", org, item.repository_name)
+        }
+        _ => String::new(),
     };
     Some((
         repo,

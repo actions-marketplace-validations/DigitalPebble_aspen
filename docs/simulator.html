@@ -1,0 +1,116 @@
+---
+layout: default
+title: Simulator
+permalink: /simulator/
+description: Enter a number of GitHub Actions minutes and get the estimated energy, carbon emissions and water consumption, with everyday equivalents.
+---
+<section class="wrap simulator">
+  <h1>Simulator</h1>
+  <p class="lead-left">Enter a number of GitHub Actions minutes and a runner type to see what Aspen would estimate for them.</p>
+
+  <form id="sim" class="sim-form" onsubmit="return false">
+    <label>
+      <span>Minutes</span>
+      <input id="minutes" type="number" min="0" step="1" value="10000" inputmode="numeric">
+    </label>
+    <label>
+      <span>Runner</span>
+      <select id="runner">
+        <option value="ubuntu" selected>Linux x64 (ubuntu-latest)</option>
+        <option value="ubuntu-arm">Linux ARM (ubuntu-24.04-arm)</option>
+        <option value="ubuntu-slim">Linux slim (ubuntu-slim)</option>
+        <option value="windows">Windows x64 (windows-latest)</option>
+        <option value="windows-arm">Windows ARM (windows-11-arm)</option>
+        <option value="macos">macOS Apple silicon (macos-latest)</option>
+        <option value="macos-intel">macOS Intel (macos-13)</option>
+      </select>
+    </label>
+  </form>
+
+  <p id="sim-error" class="note" hidden>The model values could not be loaded, so the simulator cannot run. Try reloading the page.</p>
+
+  <!-- Icons from Tabler Icons, MIT licence, https://tabler.io/icons -->
+  <ul class="figures" aria-live="polite">
+    <li><div class="fig-top"><div class="fig-icon energy" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3l0 7l6 0l-8 11l0 -7l-6 0l8 -11"/></svg></div><strong id="out-energy">–</strong></div><span>of energy, with <span id="out-power">–</span> per runner and a PUE of <span id="out-pue">–</span></span></li>
+    <li><div class="fig-top"><div class="fig-icon carbon" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21v-12l5 4v-4l5 4h4"/><path d="M19 21v-8l-1.436 -9.574a.5 .5 0 0 0 -.495 -.426h-1.145a.5 .5 0 0 0 -.494 .418l-1.43 8.582"/><path d="M9 17h1"/><path d="M14 17h1"/></svg></div><strong id="out-co2">–</strong></div><span>of CO<sub>2</sub> equivalent, at <span id="out-intensity">–</span> gCO<sub>2</sub>e/kWh for the US grid</span></li>
+    <li><div class="fig-top"><div class="fig-icon water" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.502 19.423c2.602 2.105 6.395 2.105 8.996 0c2.602 -2.105 3.262 -5.708 1.566 -8.546l-4.89 -7.26c-.42 -.625 -1.287 -.803 -1.936 -.397a1.376 1.376 0 0 0 -.41 .397l-4.893 7.26c-1.695 2.838 -1.035 6.441 1.567 8.546"/></svg></div><strong id="out-water">–</strong></div><span>of water: <span id="out-cooling">–</span> for cooling and <span id="out-wcf">–</span> for generating the electricity</span></li>
+  </ul>
+
+  <h2>That is about the same as</h2>
+  <ul class="figures equivalents">
+    <li><div class="fig-top"><div class="fig-icon energy" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 11h14v-3h-14l0 3"/><path d="M17.5 11l-1.5 10h-8l-1.5 -10"/><path d="M6 8v-1a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v1"/><path d="M15 5v-2"/></svg></div><strong id="eq-tea">–</strong></div><span>boiled, at 0.03 kWh a cup</span></li>
+    <li><div class="fig-top"><div class="fig-icon carbon" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M15 17a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M5 17h-2v-6l2 -5h9l4 5h1a2 2 0 0 1 2 2v4h-2m-4 0h-6m-6 -6h15m-6 0v-5"/></svg></div><strong id="eq-car">–</strong></div><span>driven by car, at 170 gCO<sub>2</sub>e per km</span></li>
+    <li><div class="fig-top"><div class="fig-icon water" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16a1 1 0 0 1 1 1v3a4 4 0 0 1 -4 4h-10a4 4 0 0 1 -4 -4v-3a1 1 0 0 1 1 -1"/><path d="M6 12v-7a2 2 0 0 1 2 -2h3v2.25"/><path d="M4 21l1 -1.5"/><path d="M20 21l-1 -1.5"/></svg></div><strong id="eq-bath">–</strong></div><span>run, at 150 litres a bath</span></li>
+  </ul>
+
+  <p class="note">The equivalents are round figures to give a sense of scale and are not part of Aspen's model. The <a href="{{ '/methodology/' | relative_url }}">methodology</a> explains where the other values come from and what Aspen leaves out, such as the embodied emissions of the hardware.</p>
+</section>
+
+<script>
+(function () {
+  // Equivalents, round figures, not part of Aspen's model
+  var TEA_KWH = 0.03;
+  var CAR_G_PER_KM = 170;
+  var BATH_L = 150;
+
+  var minutesEl = document.getElementById('minutes');
+  var runnerEl = document.getElementById('runner');
+  var model = null;
+
+  function fmt(value, digits) {
+    return value.toLocaleString('en', { maximumFractionDigits: digits });
+  }
+
+  // value in base units, scaled to a larger unit above 1000
+  function scaled(value, small, large) {
+    if (value >= 1000) return fmt(value / 1000, 2) + ' ' + large;
+    return fmt(value, value < 10 ? 2 : 1) + ' ' + small;
+  }
+
+  function count(value, one, many) {
+    var rounded = value < 10 ? Math.round(value * 10) / 10 : Math.round(value);
+    return fmt(rounded, 1) + ' ' + (rounded === 1 ? one : many);
+  }
+
+  function set(id, text) { document.getElementById(id).textContent = text; }
+
+  function update() {
+    if (!model) return;
+    var minutes = Math.max(0, parseFloat(minutesEl.value) || 0);
+    var watts = model.power_consumption.runners[runnerEl.value].value;
+    var pue = model.pue.value;
+    var intensity = model.grid_carbon_intensity.value;
+    var wue = model.wue.value;
+    var wcf = model.wcf.value;
+
+    // same formulas as src/estimator.rs
+    var energyWh = watts * (minutes / 60) * pue;
+    var kwh = energyWh / 1000;
+    var co2g = kwh * intensity;
+    var coolingL = kwh * wue;
+    var wcfL = kwh * wcf;
+
+    set('out-energy', scaled(energyWh, 'Wh', 'kWh'));
+    set('out-power', fmt(watts, 2) + ' W');
+    set('out-pue', fmt(pue, 2));
+    set('out-co2', scaled(co2g, 'g', 'kg'));
+    set('out-intensity', fmt(intensity, 0));
+    set('out-water', fmt(coolingL + wcfL, 2) + ' litres');
+    set('out-cooling', fmt(coolingL, 2) + ' l');
+    set('out-wcf', fmt(wcfL, 2) + ' l');
+
+    var km = co2g / CAR_G_PER_KM;
+    set('eq-car', fmt(km, km < 10 ? 2 : 0) + ' km');
+    set('eq-tea', count(kwh / TEA_KWH, 'cup of tea', 'cups of tea'));
+    set('eq-bath', count((coolingL + wcfL) / BATH_L, 'bath', 'baths'));
+  }
+
+  minutesEl.addEventListener('input', update);
+  runnerEl.addEventListener('change', update);
+
+  fetch('{{ "/assets/config.json" | relative_url }}')
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function (json) { model = json; update(); })
+    .catch(function () { document.getElementById('sim-error').hidden = false; });
+})();
+</script>

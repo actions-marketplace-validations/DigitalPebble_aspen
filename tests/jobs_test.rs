@@ -71,7 +71,8 @@ fn rounds_up_minutes_and_ignores_jobs_that_did_not_run() {
     assert_eq!(items[2].quantity, 1.0);
     assert!(items
         .iter()
-        .all(|i| i.organization_name == "DigitalPebble" && i.repository_name == "aspen"));
+        .all(|i| i.organization_name.as_deref() == Some("DigitalPebble")
+            && i.repository_name == "aspen"));
 }
 
 #[test]
