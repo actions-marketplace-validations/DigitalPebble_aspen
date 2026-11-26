@@ -1,0 +1,61 @@
+name: Rotate seasonal logo
+
+# Northern hemisphere astronomical seasons, using fixed dates (UTC):
+# spring 20 Mar, summer 21 Jun, autumn 22 Sep, winter 21 Dec.
+# The real equinox or solstice can fall a day earlier or later.
+on:
+  schedule:
+    - cron: '0 3 20 3 *'
+    - cron: '0 3 21 6 *'
+    - cron: '0 3 22 9 *'
+    - cron: '0 3 21 12 *'
+  workflow_dispatch:
+    inputs:
+      season:
+        description: Force a season (spring, summer, autumn, winter). Defaults to the current one.
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  rotate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pick the season
+        id: season
+        env:
+          FORCED: ${{ inputs.season }}
+        run: |
+          if [ -n "$FORCED" ]; then
+            season="$FORCED"
+          else
+            d=$((10#$(date -u +%m%d)))
+            if   [ "$d" -ge 1221 ] || [ "$d" -lt 320 ]; then season=winter
+            elif [ "$d" -lt 621 ]; then season=spring
+            elif [ "$d" -lt 922 ]; then season=summer
+            else season=autumn
+            fi
+          fi
+          test -f "resources/brand/seasons/aspen-icon-${season}.svg"
+          echo "season=$season" >> "$GITHUB_OUTPUT"
+
+      - name: Point the README and the site at the new logo
+        run: |
+          sed -i -E 's#aspen-icon-[a-z]+\.svg#aspen-icon-${{ steps.season.outputs.season }}.svg#' \
+            README.md scripts/build-site.sh
+
+      - name: Open a pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: season-logo
+          commit-message: Switch logo to ${{ steps.season.outputs.season }}
+          title: Switch logo to ${{ steps.season.outputs.season }}
+          body: |
+            Seasonal logo rotation. Updates the logo referenced in `README.md` and `scripts/build-site.sh`.
+
+            Merging this redeploys the website through `pages.yml`.
+          delete-branch: true
