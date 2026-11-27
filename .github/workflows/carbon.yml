@@ -13,7 +13,7 @@ jobs:
   estimate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7.0.1
       - name: Aspen - GitHub Actions Carbon Estimator
         id: aspen
         uses: DigitalPebble/aspen@v1
