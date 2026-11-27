@@ -41,7 +41,15 @@ Data centres use a growing share of the world's electricity, and a large part of
 
 ## 1. GitHub Action with the `jobs` source
 
-Pin the action to a [release](https://github.com/DigitalPebble/aspen/releases) tag. The prebuilt binary is downloaded and its SHA-256 checksum verified, so there is no Rust toolchain and no build step.
+Pin the action to a [release](https://github.com/DigitalPebble/aspen/releases) tag. The prebuilt binary is downloaded and its SHA-256 checksum verified, so there is no Rust toolchain and no build step. The archive's build attestation is also checked with `gh attestation verify` (releases from 1.4.1 on).
+
+To pin to a commit SHA, also set `version` to the matching tag, otherwise the action fails:
+
+```yaml
+  - uses: DigitalPebble/aspen@<sha> # v1.4.1
+    with:
+      version: v1.4.1
+```
 
 ```yaml
 permissions:
@@ -64,7 +72,7 @@ The built-in token is limited by GitHub to 1,000 API requests per hour (15,000 o
 | `badge_path` | `badge.json` | Where the badge JSON is written (empty to skip) |
 | `publish_badge` | `false` | Commit the badge file to `badge_branch` of this repository (needs `contents: write`) |
 | `badge_branch` | `badges` | Branch the badge is published to. Created if missing |
-| `version` | the action's tag | Release to download, e.g. `v1` or `latest` |
+| `version` | the action's tag | Release to download, e.g. `v1.4.1`, `v1` (newest 1.x.y) or `latest`. Required when pinning to a SHA |
 
 | Output | Description |
 |--------|-------------|
@@ -83,7 +91,7 @@ The JSON report is written to the runner and discarded when the job ends. To kee
 steps:
   - uses: DigitalPebble/aspen@v1
     id: aspen
-  - uses: actions/upload-artifact@v4
+  - uses: actions/upload-artifact@v7
     with:
       name: carbon-estimate
       path: ${{ steps.aspen.outputs.report-path }}

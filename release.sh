@@ -5,8 +5,10 @@ set -euo pipefail
 #   1. opens a pull request on a release-<version> branch which sets the version in Cargo.toml
 #   2. once that PR is merged, tags the merge commit on main (v<version>) and pushes the tag
 # The tag triggers .github/workflows/release.yml, which builds the binaries
-# and attaches them with their SHA-256 checksums to a draft GitHub release.
-# Publish the draft by hand (ticking the Marketplace box) once it has finished.
+# and attaches them with their SHA-256 checksums to a draft GitHub release,
+# then attests them. The script waits for the workflow, verifies the attestation
+# of every archive in the draft, and only then tells you to publish it.
+# Publishing triggers update-major-tag.yml, which moves the floating v1 tag.
 
 command -v gh >/dev/null || { echo "The GitHub CLI (gh) is required"; exit 1; }
 command -v cargo >/dev/null || { echo "cargo is required"; exit 1; }
@@ -105,8 +107,39 @@ git push origin "$TAG"
 git branch -d "$BRANCH" 2>/dev/null || true
 git push origin --delete "$BRANCH" 2>/dev/null || true
 
+REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+
+# Called when the release must not go out: say so and how to remove the draft and the tag
+abort_draft() {
+  echo "$1, do not publish the draft"
+  echo "Remove it with: gh release delete $TAG --cleanup-tag --yes"
+  exit 1
+}
+
+echo "--- Waiting for the release workflow ---"
+RUN_ID=""
+for _ in $(seq 1 30); do
+  RUN_ID=$(gh run list --workflow release.yml --branch "$TAG" --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+  [ -n "$RUN_ID" ] && break
+  sleep 5
+done
+[ -n "$RUN_ID" ] || { echo "No release.yml run found for $TAG"; exit 1; }
+gh run watch "$RUN_ID" --exit-status || abort_draft "The release workflow failed"
+
+echo "--- Verifying the attestations of the draft release ---"
+DIST=$(mktemp -d)
+gh release download "$TAG" --pattern 'aspen-*' --dir "$DIST"
+COUNT=0
+for f in "$DIST"/aspen-*; do
+  case "$f" in *.sha256) continue ;; esac
+  gh attestation verify "$f" --repo "$REPO" >/dev/null \
+    || abort_draft "Attestation verification failed for $(basename "$f")"
+  echo "OK $(basename "$f")"
+  COUNT=$((COUNT + 1))
+done
+[ "$COUNT" -gt 0 ] || abort_draft "No archives found in the draft release"
+
 echo ""
-echo "Done! Tag $TAG pushed."
-echo "The release workflow is now building the binaries into a draft release."
-echo "Publish the draft once it has finished (tick the Marketplace option):"
-gh repo view --json url --jq '.url + "/actions/workflows/release.yml"'
+echo "Done! Tag $TAG pushed and $COUNT archives verified."
+echo "Publish the draft (tick the Marketplace option), which also moves the major tag:"
+gh repo view --json url --jq '.url + "/releases"'

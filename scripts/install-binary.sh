@@ -1,33 +1,37 @@
 #!/usr/bin/env bash
 # Downloads and verifies the prebuilt aspen binary matching the runner.
-# Writes `bin=<path>` to $GITHUB_OUTPUT, or an empty `bin=` when the action
-# should build from source instead (no release for this ref, unsupported runner).
+# Writes `bin=<path>` to $GITHUB_OUTPUT.
 set -euo pipefail
 
 REPO="${ACTION_REPOSITORY:-DigitalPebble/aspen}"
 VERSION="${INPUT_VERSION:-}"
 
-set_output() {
-  echo "bin=$1" >> "${GITHUB_OUTPUT:-/dev/stdout}"
-}
-
-# Pinned to a release tag (uses: DigitalPebble/aspen@v0.3.0) => matching binary.
-if [ -z "$VERSION" ] && [[ "${ACTION_REF:-}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+# Pinned to a release tag (uses: DigitalPebble/aspen@v0.3.0) or to the floating
+# major tag (uses: DigitalPebble/aspen@v1) => matching binary.
+if [ -z "$VERSION" ] && [[ "${ACTION_REF:-}" =~ ^v?[0-9]+(\.[0-9]+\.[0-9]+)?$ ]]; then
   VERSION="$ACTION_REF"
 fi
 
 if [ -z "$VERSION" ]; then
-  echo "No release version requested (ref '${ACTION_REF:-local}'), building from source"
-  set_output ""
-  exit 0
+  echo "::error::Cannot derive a release from the ref '${ACTION_REF:-local}': pass version: vX.Y.Z when pinning to a SHA or branch"
+  exit 1
 fi
 
-if [ "$VERSION" = "latest" ]; then
+# `latest` resolves to the newest release, `v1` to the newest v1.x.y release.
+if [ "$VERSION" = "latest" ] || [[ "$VERSION" =~ ^v?[0-9]+$ ]]; then
   auth=()
   [ -n "${GITHUB_TOKEN:-}" ] && auth=(-H "Authorization: Bearer $GITHUB_TOKEN")
-  VERSION=$(curl -fsSL "${auth[@]}" "https://api.github.com/repos/$REPO/releases/latest" \
-    | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1)
-  [ -n "$VERSION" ] || { echo "::error::Could not determine the latest release of $REPO"; exit 1; }
+  if [ "$VERSION" = "latest" ]; then
+    PATTERN='[^"]*'
+  else
+    PATTERN="v\\?${VERSION#v}\\.[0-9]*\\.[0-9]*"
+  fi
+  # Releases are listed newest first.
+  RESOLVED=$(curl -fsSL "${auth[@]}" "https://api.github.com/repos/$REPO/releases?per_page=100" \
+    | sed -n "s/.*\"tag_name\": *\"\($PATTERN\)\".*/\1/p" | head -n 1)
+  [ -n "$RESOLVED" ] || { echo "::error::Could not find a release of $REPO matching '$VERSION'"; exit 1; }
+  echo "Resolved '$VERSION' to $RESOLVED"
+  VERSION="$RESOLVED"
 fi
 
 case "${RUNNER_OS:-}-${RUNNER_ARCH:-}" in
@@ -36,9 +40,8 @@ case "${RUNNER_OS:-}-${RUNNER_ARCH:-}" in
   macOS-ARM64)  TARGET=aarch64-apple-darwin;      EXT=tar.gz; EXE=aspen ;;
   Windows-X64)  TARGET=x86_64-pc-windows-msvc;    EXT=zip;    EXE=aspen.exe ;;
   *)
-    echo "::warning::No prebuilt binary for ${RUNNER_OS:-?}/${RUNNER_ARCH:-?}, building from source"
-    set_output ""
-    exit 0
+    echo "::error::No prebuilt binary for ${RUNNER_OS:-?}/${RUNNER_ARCH:-?}"
+    exit 1
     ;;
 esac
 
@@ -65,6 +68,14 @@ if [ -z "$EXPECTED" ] || [ "$EXPECTED" != "$ACTUAL" ]; then
 fi
 echo "Checksum OK ($ACTUAL)"
 
+# The checksum only catches corruption. The attestation proves the archive was
+# built by this repository's release workflow.
+command -v gh >/dev/null \
+  || { echo "::error::The GitHub CLI (gh) is required to verify the build attestation"; exit 1; }
+gh attestation verify "$DEST/$ASSET" --repo "$REPO" >/dev/null \
+  || { echo "::error::Attestation verification failed for $ASSET"; exit 1; }
+echo "Attestation OK"
+
 if [ "$EXT" = "zip" ]; then
   unzip -q -o "$DEST/$ASSET" -d "$DEST" 2>/dev/null || 7z x -y -o"$DEST" "$DEST/$ASSET" >/dev/null
 else
@@ -72,4 +83,4 @@ else
 fi
 chmod +x "$DEST/$EXE"
 
-set_output "$DEST/$EXE"
+echo "bin=$DEST/$EXE" >> "${GITHUB_OUTPUT:-/dev/stdout}"

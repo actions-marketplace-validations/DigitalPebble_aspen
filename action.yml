@@ -48,7 +48,7 @@ inputs:
   version:
     description: >-
       Aspen release tag to download (e.g. v0.3.0, or "latest"). By default the release
-      matching the action ref is used; other refs build from source.
+      matching the action ref is used. Required when pinning to a branch or a commit SHA.
     required: false
     default: ''
 
@@ -75,8 +75,7 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    # Downloads and verifies the prebuilt binary; `bin` is empty when the
-    # binary has to be built from source (branch/SHA refs, unsupported runners).
+    # Downloads and verifies the prebuilt binary.
     - name: Install aspen
       id: install
       shell: bash
@@ -86,20 +85,8 @@ runs:
         ACTION_REPOSITORY: ${{ github.action_repository }}
         INPUT_VERSION: ${{ inputs.version }}
         GITHUB_TOKEN: ${{ github.token }}
+        GH_TOKEN: ${{ github.token }}
       run: bash "$ACTION_PATH/scripts/install-binary.sh"
-
-    - name: Install Rust toolchain
-      if: steps.install.outputs.bin == ''
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        toolchain: stable
-
-    - name: Build aspen
-      if: steps.install.outputs.bin == ''
-      shell: bash
-      env:
-        ACTION_PATH: ${{ github.action_path }}
-      run: cargo build --release --manifest-path "$ACTION_PATH/Cargo.toml"
 
     # Inputs are passed through the environment, never interpolated into the
     # script, to avoid script injection and to keep the token out of argv.
@@ -108,7 +95,6 @@ runs:
       id: aspen
       shell: bash
       env:
-        ACTION_PATH: ${{ github.action_path }}
         ASPEN_BIN: ${{ steps.install.outputs.bin }}
         INPUT_GITHUB_TOKEN: ${{ inputs.github_token }}
         INPUT_REPOSITORY: ${{ github.repository }}
@@ -116,7 +102,7 @@ runs:
         INPUT_DAYS: ${{ inputs.days }}
         INPUT_OUTPUT_PATH: ${{ inputs.output_path }}
         INPUT_BADGE_PATH: ${{ inputs.badge_path }}
-      run: '"${ASPEN_BIN:-$ACTION_PATH/target/release/aspen}"'
+      run: '"$ASPEN_BIN"'
 
     - name: Set output
       id: report
